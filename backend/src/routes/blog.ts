@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client/edge";
 import { Hono } from "hono";
 import { withAccelerate } from '@prisma/extension-accelerate'
 import { verify } from "hono/jwt";
+import { createBlogInput, updateBlogInput } from "@aditya-test/blog-common";
 
 
 export const blogRouter = new Hono<{
@@ -20,10 +21,10 @@ blogRouter.use("/*", async (c, next) => {
         return c.json("Authentication failed")
     }
     const token = authHeader.split(' ')[1]
-    const user = await verify(token, c.env.JWT_SECRET)
+    const user = await verify(token, c.env.JWT_SECRET)    
     
     if (user){        
-        c.set('userId', String(user.id))
+        c.set('userId', String(user.id))        
         await next();
     }
     else{
@@ -38,8 +39,13 @@ blogRouter.post('/', async (c) => {
     const prisma = new PrismaClient({
         datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate())
-
+    
     const body = await c.req.json()
+    const { success } = createBlogInput.safeParse(body)
+        if (!success){
+            c.status(411)
+            c.json({'error': 'Something went wrong'})
+        }
     const authorId = c.get("userId")
     const blog = await prisma.post.create({
         data: {
@@ -61,6 +67,12 @@ blogRouter.put('/', async (c) => {
     }).$extends(withAccelerate())
 
     const body = await c.req.json()
+    
+    const { success } = updateBlogInput.safeParse(body)
+    if (!success){
+        c.status(411)
+        c.json({'error': 'Something went wrong'})
+    }
     const blog = await prisma.post.update({
         where:{
             id: body.id
@@ -70,7 +82,7 @@ blogRouter.put('/', async (c) => {
             content: body.content,
         }
     })
-    return c.text("Update blog")
+    return c.json({blog})
 })
 blogRouter.get('/bulk', async (c) => {
     const prisma = new PrismaClient({
